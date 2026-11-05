@@ -177,8 +177,9 @@ window.handleFormSubmit = async function (e) {
   const id = el('event-id').value;
   const title = el('event-title').value.trim(), start = el('event-start').value, end = el('event-end').value;
   const color = el('event-color').value, desc = el('event-desc').value.trim();
-  if (!title || title.length > 120 || desc.length > 3000 || !validDate(start) || !validDate(end) || end < start || !MORANDI_COLORS[color]) {
-    showFeedback('請檢查標題、日期範圍（2026/11–2027/9）與內容長度。'); return;
+  const time = el('event-time')?.value || '';
+  if (!title || title.length > 120 || desc.length > 3000 || !validDate(start) || !validDate(end) || end < start || !MORANDI_COLORS[color] || (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time))) {
+    showFeedback('請檢查標題、日期範圍（2026/11–2027/9）、開始時間與內容長度。'); return;
   }
   const target = id ? db.ref(`calendar/events/${id}`) : db.ref('calendar/events').push();
   const expectedRev = id ? window.editingRevision : 0;
@@ -186,7 +187,7 @@ window.handleFormSubmit = async function (e) {
   const saved = await writeWithStatus(async () => {
     const result = await target.transaction(current => {
       if ((current?.rev || 0) !== expectedRev) return;
-      return {title,start,end,color,desc,rev:expectedRev + 1,updatedBy:uid,updatedAt:firebase.database.ServerValue.TIMESTAMP};
+      return {title,start,end,color,desc,...(time ? {time} : {}),rev:expectedRev + 1,updatedBy:uid,updatedAt:firebase.database.ServerValue.TIMESTAMP};
     }, undefined, false);
     if (!result.committed) { showFeedback('這筆行程已被他人修改或刪除。請先保留你的內容，再關閉並重新開啟行程。'); throw Object.assign(new Error('conflict'),{code:'CONFLICT'}); }
   });
@@ -295,7 +296,7 @@ auth.onAuthStateChanged(async user => {
   paintStatus();
 });
 window.exportCalendar = function () {
-  const draftEvent = !el('event-modal').classList.contains('hidden') ? {title:el('event-title').value,start:el('event-start').value,end:el('event-end').value,desc:el('event-desc').value} : null;
+  const draftEvent = !el('event-modal').classList.contains('hidden') ? {title:el('event-title').value,start:el('event-start').value,end:el('event-end').value,time:el('event-time')?.value || '',desc:el('event-desc').value} : null;
   const blob = new Blob([JSON.stringify({exportedAt:new Date().toISOString(),events,notes:monthlyNotes,noteDrafts:Object.fromEntries(noteDrafts),draftEvent},null,2)],{type:'application/json'});
   const url = URL.createObjectURL(blob), link = document.createElement('a');
   link.href=url; link.download=`podcast-calendar-${new Date().toISOString().slice(0,10)}.json`; link.click(); URL.revokeObjectURL(url);
