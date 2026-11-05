@@ -10,7 +10,7 @@ firebase.initializeApp({
 });
 const db = firebase.database();
 const auth = firebase.auth();
-const OWNER_EMAIL = 'akashineva1226@gmail.com';
+let ownerUid = null;
 const el = id => document.getElementById(id);
 const monthId = () => `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
 let connected = false, receivedEvents = false, receivedNotes = false;
@@ -20,7 +20,7 @@ const noteDrafts = new Map();
 let notesBusy = false;
 
 window.showFeedback = message => { el('feedback').textContent = message; };
-const isOwner = user => user?.emailVerified && user.email === OWNER_EMAIL;
+const isOwner = user => user?.emailVerified && user.uid === ownerUid;
 window.canEditCalendar = () => !!auth.currentUser && permission && connected && receivedEvents && receivedNotes;
 function paintStatus() {
   const ready = receivedEvents && receivedNotes;
@@ -164,8 +164,14 @@ function renderPeople() {
     }));
   }
 }
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
   ownMembershipOff?.(); ownRequestOff?.(); adminOff.forEach(off => off()); adminOff = [];
+  permission = false; ownerUid = null; paintStatus();
+  if (user?.emailVerified) {
+    try { if ((await db.ref(`admins/${user.uid}`).get()).val() === true) ownerUid = user.uid; }
+    catch (error) { displayError(error); }
+  }
+  if (auth.currentUser?.uid !== user?.uid) return;
   permission = !!isOwner(user);
   el('login-btn').hidden = !!user; el('logout-btn').hidden = !user;
   el('request-btn').hidden = !user || permission;
