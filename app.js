@@ -275,12 +275,12 @@ auth.onAuthStateChanged(async user => {
   el('login-btn').hidden = !!user; el('logout-btn').hidden = !user;
   el('request-btn').hidden = !user || permission;
   el('admin-panel').hidden = !isOwner(user);
-  el('account-status').textContent = !user ? '公開瀏覽' : `${user.displayName || user.email} · ${permission ? '管理員' : '僅可瀏覽'}`;
+  el('account-status').textContent = !user ? '公開瀏覽' : `${isOwner(user) ? 'Chou' : user.displayName || user.email} · ${permission ? '管理員' : '僅可瀏覽'}`;
   if (user) {
     ownMembershipOff = subscribe(db.ref(`members/${user.uid}`), snap => {
       permission = !!isOwner(user) || (user.emailVerified && snap.exists());
       el('request-btn').hidden = permission;
-      el('account-status').textContent = `${user.displayName || user.email} · ${isOwner(user) ? '管理員' : permission ? '團隊編輯' : '僅可瀏覽'}`;
+      el('account-status').textContent = `${isOwner(user) ? 'Chou' : user.displayName || user.email} · ${isOwner(user) ? '管理員' : permission ? '團隊編輯' : '僅可瀏覽'}`;
       if (!permission) closeModal(); paintStatus();
     });
     ownRequestOff = subscribe(db.ref(`requests/${user.uid}`), snap => {
