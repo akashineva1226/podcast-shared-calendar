@@ -55,6 +55,26 @@
           }
         }
       },
+      "monthlyTasks": {
+        "$month": {
+          ".read": "$month.matches(/^(2026-12|2027-0[1-9])$/)",
+          "$group": {
+            "$id": {
+              ".write": "$month.matches(/^(2026-12|2027-0[1-9])$/) && $group.matches(/^(host|marketing|engineering)$/) && auth != null && auth.token.email_verified == true && (root.child('admins').child(auth.uid).val() == true || root.child('members').child(auth.uid).exists()) && newData.exists()",
+              ".validate": "newData.hasChildren(['title','done'])",
+              "title": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 160"
+              },
+              "done": {
+                ".validate": "newData.isBoolean()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          }
+        }
+      },
       "notes": {
         ".read": true,
         "$month": {
