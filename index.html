@@ -180,6 +180,11 @@
                     </div>
                 </div>
 
+                <div>
+                    <label for="event-time" class="block text-sm font-medium text-morandi-muted mb-1.5">開始時間（選填，台灣時間）</label>
+                    <input type="time" id="event-time" class="w-full px-4 py-2.5 bg-morandi-bg border border-morandi-border rounded-xl">
+                </div>
+
                 <!-- 色彩選擇器 (增加至10種顏色) -->
                 <div>
                     <label class="block text-sm font-medium text-morandi-muted mb-2">色彩標記</label>
@@ -187,6 +192,7 @@
                         <!-- 由 JS 動態生成色塊 -->
                     </div>
                     <input type="hidden" id="event-color" value="sage">
+                    <p id="selected-event-color" class="mt-2 text-sm text-morandi-muted"></p>
                 </div>
 
                 <!-- 備註說明 -->
@@ -211,6 +217,13 @@
         </div>
     </div>
 
+    <dialog id="event-details" aria-labelledby="event-details-title" class="w-11/12 max-w-lg rounded-2xl p-6 text-morandi-text backdrop:bg-black/30">
+        <h2 id="event-details-title" class="text-xl font-bold break-words"></h2>
+        <p id="event-details-date" class="mt-2 text-sm text-morandi-muted"></p>
+        <p id="event-details-note" class="mt-4 whitespace-pre-wrap break-words select-text"></p>
+        <form method="dialog" class="mt-5 text-right"><button class="rounded-lg bg-morandi-bg px-4 py-2">關閉</button></form>
+    </dialog>
+
     <!-- JavaScript 核心邏輯 -->
     <script>
         // 1. 限定翻頁範圍：2026年11月 至 2027年9月
@@ -229,10 +242,10 @@
             clay: { name: '赤陶', bg: 'bg-[#B88B7D]', text: 'text-white' },
             sand: { name: '沙丘黃', bg: 'bg-[#CBB29B]', text: 'text-white' },
             lavender: { name: '薰衣草灰', bg: 'bg-[#9B8C9B]', text: 'text-white' },
-            olive: { name: '煙燻綠', bg: 'bg-[#949B85]', text: 'text-white' },
-            taupe: { name: '可可棕', bg: 'bg-[#9C8E85]', text: 'text-white' },
-            denim: { name: '牛仔藍', bg: 'bg-[#6C7D8E]', text: 'text-white' },
-            plum: { name: '微醺紫', bg: 'bg-[#8E7C8E]', text: 'text-white' }
+            olive: { name: '開心果綠', bg: 'bg-[#C7D19C]', text: 'text-[#334025]' },
+            taupe: { name: '奶油金', bg: 'bg-[#E6D69C]', text: 'text-[#453713]' },
+            denim: { name: '海玻璃青', bg: 'bg-[#A8CFCA]', text: 'text-[#234340]' },
+            plum: { name: '灰莓紫', bg: 'bg-[#C2A0BA]', text: 'text-[#412B40]' }
         };
 
         let events = [];
@@ -246,6 +259,7 @@
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.title = c.name;
+                btn.setAttribute('aria-label', c.name);
                 btn.className = `w-8 h-8 rounded-full ${c.bg} transition-all flex items-center justify-center border-2 border-transparent focus:outline-none hover:scale-105 cursor-pointer shadow-sm`;
                 btn.dataset.colorKey = key;
                 btn.onclick = () => selectColor(key);
@@ -257,8 +271,10 @@
 
         function selectColor(colorKey) {
             document.getElementById('event-color').value = colorKey;
+            document.getElementById('selected-event-color').textContent = MORANDI_COLORS[colorKey].name;
             Object.keys(MORANDI_COLORS).forEach(key => {
                 const btn = document.getElementById(`color-btn-${key}`);
+                btn.setAttribute('aria-pressed', String(key === colorKey));
                 if (key === colorKey) {
                     btn.classList.add('scale-110', 'ring-2', 'ring-offset-2', 'ring-morandi-muted');
                 } else {
@@ -380,9 +396,11 @@
                     const isMultiDay = ev.start !== ev.end;
                     const isSunday = (i % 7 === 0); // 每一週第一天
 
-                    const eventBar = document.createElement('div');
+                    const eventBar = document.createElement('button');
+                    eventBar.type = 'button';
+                    eventBar.setAttribute('aria-label', `${ev.title}${ev.time ? `，${ev.time}` : ''}${ev.desc ? '，有備註' : ''}`);
                     // 專門將色條上下內邊距獨立加寬 (py-3 sm:py-3.5)，行程文字獨立放大至 (text-base sm:text-lg)
-                    eventBar.className = `event-bar text-base sm:text-lg leading-snug px-3 py-3 sm:py-3.5 cursor-pointer ${colorStyle.bg} ${colorStyle.text} font-bold flex items-center justify-between gap-1 shadow-sm`;
+                    eventBar.className = `event-bar text-base sm:text-lg leading-snug px-3 py-3 sm:py-3.5 cursor-pointer ${colorStyle.bg} ${colorStyle.text} font-bold flex flex-col items-start text-left gap-1 shadow-sm`;
                     
                     if (isMultiDay) {
                         if (isStart) {
@@ -416,6 +434,14 @@
                     }
 
                     eventBar.appendChild(titleSpan);
+
+                    if (ev.time || ev.desc) {
+                        const detail = document.createElement('span');
+                        detail.className = 'block w-full truncate text-xs font-medium';
+                        detail.textContent = isStart || isSunday ? [isStart ? ev.time : '', ev.desc].filter(Boolean).join(' · ') : '';
+                        if (!detail.textContent) detail.textContent = '\u00a0';
+                        eventBar.appendChild(detail);
+                    }
 
                     eventBar.onclick = (e) => {
                         e.stopPropagation();
@@ -455,6 +481,7 @@
             const todayStr = defaultDate || `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-01`;
             document.getElementById('event-start').value = todayStr;
             document.getElementById('event-end').value = todayStr;
+            document.getElementById('event-time').value = '';
             document.getElementById('event-desc').value = '';
             document.getElementById('delete-event-btn').classList.add('hidden');
             
@@ -466,9 +493,16 @@
 
         // 開啟 Modal (編輯)
         function openModalForEdit(eventId) {
-            if (!window.canEditCalendar?.()) { window.showFeedback?.('請先登入並取得編輯權限。'); return; }
             const ev = events.find(item => item.id === eventId);
             if (!ev) return;
+            if (!window.canEditCalendar?.()) {
+                const dates = ev.start === ev.end ? ev.start : `${ev.start} ～ ${ev.end}`;
+                document.getElementById('event-details-title').textContent = ev.title;
+                document.getElementById('event-details-date').textContent = ev.time ? `${dates} · 開始 ${ev.time}（台灣時間）` : dates;
+                document.getElementById('event-details-note').textContent = ev.desc || '';
+                document.getElementById('event-details').showModal();
+                return;
+            }
             window.editingRevision = ev.rev;
 
             document.getElementById('modal-title').innerHTML = `
@@ -479,6 +513,7 @@
             document.getElementById('event-title').value = ev.title;
             document.getElementById('event-start').value = ev.start;
             document.getElementById('event-end').value = ev.end;
+            document.getElementById('event-time').value = ev.time || '';
             document.getElementById('event-desc').value = ev.desc || '';
             document.getElementById('delete-event-btn').classList.remove('hidden');
 
@@ -498,5 +533,5 @@
     <script src="https://www.gstatic.com/firebasejs/12.5.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.5.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.5.0/firebase-database-compat.js"></script>
-    <script src="app.js?v=admin-display-chou"></script>
+    <script src="app.js?v=event-details"></script>
 </body></html>
