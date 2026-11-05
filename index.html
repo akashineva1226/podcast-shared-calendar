@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podcast 共用行事曆</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.468.0"></script>
+    <!-- Google Fonts: Noto Sans TC & Serif -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,400&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        morandi: {
+                            bg: '#F7F5F0',        // 燕麥奶底色
+                            card: '#FFFFFF',      // 純白卡片
+                            border: '#E5E0D8',    // 柔和邊框
+                            text: '#3A3E41',      // 灰赭字體 (調深增強對比)
+                            muted: '#767C82',     // 淺灰次要字
+                            sage: '#8A9A86',      // 鼠尾草綠
+                            sagedark: '#6E7E6A',
+                            dustypink: '#C8A29A', // 霧粉色
+                            slate: '#788896',     // 霧藍灰
+                            clay: '#B88B7D',      // 赤陶色
+                            sand: '#CBB29B',      // 沙丘黃
+                            lavender: '#9B8C9B',  // 薰衣草灰
+                            olive: '#949B85',     // 煙燻綠 (新增)
+                            taupe: '#9C8E85',     // 可可棕 (新增)
+                            denim: '#6C7D8E',     // 牛仔藍 (新增)
+                            plum: '#8E7C8E',      // 微醺紫 (新增)
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Noto Sans TC', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 客製化捲軸 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #F7F5F0;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #D5CFC5;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #B8B2A6;
+        }
+
+        .event-bar {
+            transition: all 0.15s ease-in-out;
+        }
+        .event-bar:hover {
+            filter: brightness(0.93);
+            transform: translateY(-1px);
+        }
+        button:disabled {opacity:.45;cursor:not-allowed;}
+        [hidden] {display:none!important;}
+        @media(max-width:640px){#calendar-days{min-width:700px;}main{overflow-x:auto!important;}#event-modal>div{max-height:90vh;overflow-y:auto;}}
+    </style>
+</head>
+<body class="bg-morandi-bg text-morandi-text font-sans min-h-screen flex flex-col justify-between p-3 sm:p-6 select-none text-base">
+
+    <section class="max-w-7xl mx-auto w-full mb-4 bg-white rounded-2xl border border-morandi-border p-4" aria-label="共用狀態">
+<div class="flex flex-wrap items-center justify-between gap-3"><div><strong>Podcast 共用行事曆</strong><p id="sync-status" role="status" aria-live="polite" class="text-sm mt-1">正在連線…</p></div><div class="flex flex-wrap gap-2 items-center"><span id="account-status" class="text-sm">公開瀏覽</span><button id="login-btn" onclick="login()" class="bg-morandi-sage text-white px-4 py-2 rounded-xl">Google 登入</button><button id="request-btn" hidden onclick="requestAccess()" class="bg-morandi-slate text-white px-4 py-2 rounded-xl">申請編輯權限</button><button id="logout-btn" hidden onclick="logout()" class="border px-4 py-2 rounded-xl">登出</button><button onclick="exportCalendar()" class="border px-4 py-2 rounded-xl">下載備份</button></div></div>
+<p id="feedback" role="status" aria-live="polite" class="text-sm mt-2"></p><p class="text-xs text-morandi-muted mt-2">行程與備忘錄公開可見；核准的團隊成員可共同編輯，請勿填入私密資料。</p>
+<details id="admin-panel" hidden class="mt-3"><summary class="cursor-pointer">團隊成員管理</summary><div id="member-requests" class="space-y-2 mt-3"></div><div id="member-list" class="space-y-2 mt-3"></div></details></section>
+<!-- 主容器 -->
+    <div class="max-w-7xl mx-auto w-full flex-1 flex flex-col gap-6">
+        
+        <!-- 頂部導覽與控制區 -->
+        <header class="bg-morandi-card rounded-2xl p-5 sm:p-6 shadow-sm border border-morandi-border flex flex-col md:flex-row items-center justify-between gap-4">
+            <!-- 月份標題與翻頁控制 -->
+            <div class="flex items-center gap-5">
+                <div class="flex items-center gap-1 bg-morandi-bg rounded-xl p-1.5 border border-morandi-border">
+                    <button id="prev-month-btn" onclick="changeMonth(-1)" class="p-2.5 rounded-lg hover:bg-white text-morandi-muted hover:text-morandi-text transition disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer" title="上一月">
+                        <i data-lucide="chevron-left" class="w-6 h-6"></i>
+                    </button>
+                    <button id="next-month-btn" onclick="changeMonth(1)" class="p-2.5 rounded-lg hover:bg-white text-morandi-muted hover:text-morandi-text transition disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer" title="下一月">
+                        <i data-lucide="chevron-right" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div>
+                    <h1 id="current-month-display" class="text-3xl sm:text-4xl font-bold font-serif tracking-wide text-morandi-text">2026 年 11 月</h1>
+                    <p id="month-subtitle" class="text-sm sm:text-base text-morandi-muted mt-1">點擊日期格或上方按鈕新增事項</p>
+                </div>
+            </div>
+
+            <!-- 右側快速操作與說明 -->
+            <div class="flex items-center gap-3 w-full md:w-auto justify-end">
+                <button id="add-event-btn" disabled onclick="openModal()" class="flex items-center gap-2 bg-morandi-sage hover:bg-morandi-sagedark text-white px-5 py-3 rounded-xl shadow-sm text-base font-medium transition cursor-pointer">
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                    <span>新增行程 / 跨天事項</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- 月曆主要核心區塊 -->
+        <main class="bg-morandi-card rounded-2xl shadow-sm border border-morandi-border p-4 sm:p-6 flex-1 flex flex-col overflow-hidden">
+            <!-- 星期抬頭 (加大字體) -->
+            <div class="grid grid-cols-7 text-center font-bold text-lg sm:text-xl text-morandi-muted pb-3 border-b border-morandi-border">
+                <div class="text-morandi-dustypink">日 (Sun)</div>
+                <div>一 (Mon)</div>
+                <div>二 (Tue)</div>
+                <div>三 (Wed)</div>
+                <div>四 (Thu)</div>
+                <div>五 (Fri)</div>
+                <div class="text-morandi-slate">六 (Sat)</div>
+            </div>
+
+            <!-- 月曆日期格子網格 (6週 x 7天) -->
+            <div id="calendar-days" class="grid grid-cols-7 flex-1 border-b border-l border-morandi-border/60">
+                <!-- 由 JavaScript 動態生成日期與事件 -->
+            </div>
+        </main>
+
+        <!-- 下方備註與記事空間 (Monthly Notes) -->
+        <footer class="bg-morandi-card rounded-2xl p-5 sm:p-6 shadow-sm border border-morandi-border">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2.5">
+                    <i data-lucide="notebook-pen" class="w-6 h-6 text-morandi-slate"></i>
+                    <h3 class="font-bold text-lg text-morandi-text">本月重點備忘錄</h3>
+                </div>
+                <span id="save-status" class="text-xs sm:text-sm text-morandi-muted opacity-0 transition-opacity">已自動儲存</span>
+            </div>
+            <textarea id="monthly-notes" oninput="markNotesDirty()" maxlength="10000" disabled placeholder="在此輸入本月份的總結、重要目標或特別提醒事項..." class="w-full h-28 p-4 text-base bg-morandi-bg/60 border border-morandi-border rounded-xl focus:outline-none focus:ring-2 focus:ring-morandi-sage/50 resize-none text-morandi-text placeholder:text-morandi-muted/70 leading-relaxed"></textarea>
+        </footer>
+
+    </div>
+
+    <!-- Modal: 新增 / 編輯行程與跨天事項 -->
+    <div role="dialog" aria-modal="true" aria-labelledby="modal-title" id="event-modal" class="fixed inset-0 bg-black/35 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-morandi-card rounded-2xl shadow-xl border border-morandi-border w-full max-w-lg p-6 sm:p-7 relative flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150">
+            <!-- 關閉按鈕 -->
+            <button onclick="closeModal()" class="absolute top-5 right-5 text-morandi-muted hover:text-morandi-text p-1 rounded-lg">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+
+            <h3 id="modal-title" class="text-xl font-bold text-morandi-text flex items-center gap-2.5">
+                <i data-lucide="calendar-plus" class="w-6 h-6 text-morandi-sage"></i>
+                <span>新增待辦行程</span>
+            </h3>
+
+            <form id="event-form" onsubmit="handleFormSubmit(event)" class="space-y-4">
+                <input type="hidden" id="event-id">
+
+                <!-- 事件內容 -->
+                <div>
+                    <label class="block text-sm font-medium text-morandi-muted mb-1.5">事項名稱</label>
+                    <input type="text" id="event-title" maxlength="120" required placeholder="例如：專案執行、家族旅遊..." class="w-full px-4 py-2.5 bg-morandi-bg border border-morandi-border rounded-xl text-base text-morandi-text focus:outline-none focus:ring-2 focus:ring-morandi-sage/50">
+                </div>
+
+                <!-- 開始與結束日期 (跨天功能核心) -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-morandi-muted mb-1.5">開始日期</label>
+                        <input min="2026-11-01" max="2027-09-30" type="date" id="event-start" required class="w-full px-4 py-2.5 bg-morandi-bg border border-morandi-border rounded-xl text-base text-morandi-text focus:outline-none focus:ring-2 focus:ring-morandi-sage/50">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-morandi-muted mb-1.5">結束日期 (可跨天)</label>
+                        <input min="2026-11-01" max="2027-09-30" type="date" id="event-end" required class="w-full px-4 py-2.5 bg-morandi-bg border border-morandi-border rounded-xl text-base text-morandi-text focus:outline-none focus:ring-2 focus:ring-morandi-sage/50">
+                    </div>
+                </div>
+
+                <!-- 色彩選擇器 (增加至10種顏色) -->
+                <div>
+                    <label class="block text-sm font-medium text-morandi-muted mb-2">色彩標記</label>
+                    <div class="flex flex-wrap items-center gap-3" id="color-picker-container">
+                        <!-- 由 JS 動態生成色塊 -->
+                    </div>
+                    <input type="hidden" id="event-color" value="sage">
+                </div>
+
+                <!-- 備註說明 -->
+                <div>
+                    <label class="block text-sm font-medium text-morandi-muted mb-1.5">詳細細節 / 備註 (選填)</label>
+                    <textarea id="event-desc" maxlength="3000" rows="2" placeholder="詳細說明或交辦事項..." class="w-full p-3.5 bg-morandi-bg border border-morandi-border rounded-xl text-base text-morandi-text focus:outline-none focus:ring-2 focus:ring-morandi-sage/50 resize-none leading-relaxed"></textarea>
+                </div>
+
+                <!-- 按鈕區 -->
+                <div class="flex items-center justify-end gap-3 pt-3">
+                    <button type="button" id="delete-event-btn" onclick="deleteCurrentEvent()" class="hidden px-4 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-base font-medium hover:bg-red-100 transition mr-auto">
+                        刪除
+                    </button>
+                    <button type="button" onclick="closeModal()" class="px-5 py-2.5 bg-morandi-bg hover:bg-morandi-border/40 text-morandi-text rounded-xl text-base font-medium transition">
+                        取消
+                    </button>
+                    <button type="submit" class="px-6 py-2.5 bg-morandi-sage hover:bg-morandi-sagedark text-white rounded-xl text-base font-medium transition">
+                        儲存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript 核心邏輯 -->
+    <script>
+        // 1. 限定翻頁範圍：2026年11月 至 2027年9月
+        const MIN_YEAR = 2026, MIN_MONTH = 10; // 10代表11月 (JS Month 0-11)
+        const MAX_YEAR = 2027, MAX_MONTH = 8;  // 8代表9月
+
+        // 目前顯示月份
+        let currentYear = 2026;
+        let currentMonth = 10; // 11月
+
+        // 升級：10種質感色系選擇 (已移除「莫蘭迪」文字)
+        const MORANDI_COLORS = {
+            sage: { name: '鼠尾草綠', bg: 'bg-[#8A9A86]', text: 'text-white' },
+            dustypink: { name: '霧粉', bg: 'bg-[#C8A29A]', text: 'text-white' },
+            slate: { name: '霧藍灰', bg: 'bg-[#788896]', text: 'text-white' },
+            clay: { name: '赤陶', bg: 'bg-[#B88B7D]', text: 'text-white' },
+            sand: { name: '沙丘黃', bg: 'bg-[#CBB29B]', text: 'text-white' },
+            lavender: { name: '薰衣草灰', bg: 'bg-[#9B8C9B]', text: 'text-white' },
+            olive: { name: '煙燻綠', bg: 'bg-[#949B85]', text: 'text-white' },
+            taupe: { name: '可可棕', bg: 'bg-[#9C8E85]', text: 'text-white' },
+            denim: { name: '牛仔藍', bg: 'bg-[#6C7D8E]', text: 'text-white' },
+            plum: { name: '微醺紫', bg: 'bg-[#8E7C8E]', text: 'text-white' }
+        };
+
+        let events = [];
+        let monthlyNotes = {};
+        window.addEventListener('load', () => { renderColorPicker(); renderCalendar(); });
+        function renderColorPicker() {
+            const container = document.getElementById('color-picker-container');
+            container.innerHTML = '';
+            Object.keys(MORANDI_COLORS).forEach(key => {
+                const c = MORANDI_COLORS[key];
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.title = c.name;
+                btn.className = `w-8 h-8 rounded-full ${c.bg} transition-all flex items-center justify-center border-2 border-transparent focus:outline-none hover:scale-105 cursor-pointer shadow-sm`;
+                btn.dataset.colorKey = key;
+                btn.onclick = () => selectColor(key);
+                btn.id = `color-btn-${key}`;
+                container.appendChild(btn);
+            });
+            selectColor('sage');
+        }
+
+        function selectColor(colorKey) {
+            document.getElementById('event-color').value = colorKey;
+            Object.keys(MORANDI_COLORS).forEach(key => {
+                const btn = document.getElementById(`color-btn-${key}`);
+                if (key === colorKey) {
+                    btn.classList.add('scale-110', 'ring-2', 'ring-offset-2', 'ring-morandi-muted');
+                } else {
+                    btn.classList.remove('scale-110', 'ring-2', 'ring-offset-2', 'ring-morandi-muted');
+                }
+            });
+        }
+
+        // 翻頁控制 (限制 2026.11 - 2027.09)
+        function changeMonth(delta) {
+            let newMonth = currentMonth + delta;
+            let newYear = currentYear;
+
+            if (newMonth > 11) {
+                newMonth = 0;
+                newYear++;
+            } else if (newMonth < 0) {
+                newMonth = 11;
+                newYear--;
+            }
+
+            if (newYear < MIN_YEAR || (newYear === MIN_YEAR && newMonth < MIN_MONTH)) return;
+            if (newYear > MAX_YEAR || (newYear === MAX_YEAR && newMonth > MAX_MONTH)) return;
+
+            currentYear = newYear;
+            currentMonth = newMonth;
+            renderCalendar();
+        }
+
+        // 核心：渲染月曆格子與跨天橫條
+        function renderCalendar() {
+            const monthNames = ["1 月", "2 月", "3 月", "4 月", "5 月", "6 月", "7 月", "8 月", "9 月", "10 月", "11 月", "12 月"];
+            document.getElementById('current-month-display').innerText = `${currentYear} 年 ${monthNames[currentMonth]}`;
+
+            document.getElementById('prev-month-btn').disabled = (currentYear === MIN_YEAR && currentMonth === MIN_MONTH);
+            document.getElementById('next-month-btn').disabled = (currentYear === MAX_YEAR && currentMonth === MAX_MONTH);
+
+            const monthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+            if (window.renderNotes) window.renderNotes();
+
+            const grid = document.getElementById('calendar-days');
+            grid.innerHTML = '';
+
+            const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
+            const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+            const prevMonthTotalDays = new Date(currentYear, currentMonth, 0).getDate();
+
+            const totalCells = (firstDayIndex + totalDays > 35) ? 42 : 35;
+
+            for (let i = 0; i < totalCells; i++) {
+                const dayCell = document.createElement('div');
+                // 調大格子最小高度以容納加寬的色條
+                dayCell.className = "border-r border-t border-morandi-border/60 min-h-[150px] sm:min-h-[170px] p-1.5 sm:p-2 flex flex-col justify-start relative transition hover:bg-white/60 group overflow-hidden";
+
+                let cellDateStr = "";
+                let dayNum = 0;
+                let isCurrentMonth = false;
+
+                if (i < firstDayIndex) {
+                    dayNum = prevMonthTotalDays - firstDayIndex + i + 1;
+                    const prevM = currentMonth === 0 ? 11 : currentMonth - 1;
+                    const prevY = currentMonth === 0 ? currentYear - 1 : currentYear;
+                    cellDateStr = `${prevY}-${String(prevM + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                    dayCell.classList.add('bg-morandi-bg/40', 'opacity-40');
+                } else if (i >= firstDayIndex + totalDays) {
+                    dayNum = i - (firstDayIndex + totalDays) + 1;
+                    const nextM = currentMonth === 11 ? 0 : currentMonth + 1;
+                    const nextY = currentMonth === 11 ? currentYear + 1 : currentYear;
+                    cellDateStr = `${nextY}-${String(nextM + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                    dayCell.classList.add('bg-morandi-bg/40', 'opacity-40');
+                } else {
+                    dayNum = i - firstDayIndex + 1;
+                    isCurrentMonth = true;
+                    cellDateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+
+                    const todayStr = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Taipei'}).format(new Date());
+                    if (cellDateStr === todayStr) {
+                        dayCell.classList.add('bg-morandi-sage/10');
+                    }
+                }
+
+                // 標題日期數字與 (+) 按鈕 (保持原本大小 text-base / text-lg)
+                const headerDiv = document.createElement('div');
+                headerDiv.className = "flex items-center justify-between mb-2 px-1";
+                
+                const numSpan = document.createElement('span');
+                numSpan.className = `text-base sm:text-lg font-bold tracking-tight ${isCurrentMonth ? 'text-morandi-text' : 'text-morandi-muted'}`;
+                numSpan.innerText = dayNum;
+
+                const addBtn = document.createElement('button');
+                addBtn.className = "opacity-0 group-hover:opacity-100 text-morandi-muted hover:text-morandi-sage transition p-0.5";
+                addBtn.innerHTML = '<i data-lucide="plus-circle" class="w-5 h-5"></i>';
+                addBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    openModal(cellDateStr);
+                };
+
+                headerDiv.appendChild(numSpan);
+                headerDiv.appendChild(addBtn);
+                dayCell.appendChild(headerDiv);
+
+                dayCell.onclick = (e) => {
+                    if (e.target === dayCell || e.target === headerDiv || e.target === numSpan) {
+                        openModal(cellDateStr);
+                    }
+                };
+
+                // 事件容器
+                const dayEventsContainer = document.createElement('div');
+                dayEventsContainer.className = "flex flex-col gap-2 w-full flex-1 overflow-y-auto";
+
+                const matchedEvents = getEventsForDate(cellDateStr);
+                matchedEvents.forEach(ev => {
+                    const colorStyle = MORANDI_COLORS[ev.color] || MORANDI_COLORS.sage;
+                    
+                    const isStart = ev.start === cellDateStr;
+                    const isEnd = ev.end === cellDateStr;
+                    const isMultiDay = ev.start !== ev.end;
+                    const isSunday = (i % 7 === 0); // 每一週第一天
+
+                    const eventBar = document.createElement('div');
+                    // 專門將色條上下內邊距獨立加寬 (py-3 sm:py-3.5)，行程文字獨立放大至 (text-base sm:text-lg)
+                    eventBar.className = `event-bar text-base sm:text-lg leading-snug px-3 py-3 sm:py-3.5 cursor-pointer ${colorStyle.bg} ${colorStyle.text} font-bold flex items-center justify-between gap-1 shadow-sm`;
+                    
+                    if (isMultiDay) {
+                        if (isStart) {
+                            // 開始天：圓左角，右側直角擴展出格子邊界
+                            eventBar.classList.add('rounded-l-xl', 'rounded-r-none', '-mr-2');
+                        } else if (isEnd) {
+                            // 結束天：圓右角，左側直角擴展出格子邊界
+                            eventBar.classList.add('rounded-r-xl', 'rounded-l-none', '-ml-2');
+                        } else {
+                            // 中間天：兩側直角延伸
+                            eventBar.classList.add('rounded-none', '-mx-2');
+                        }
+                    } else {
+                        eventBar.classList.add('rounded-xl');
+                    }
+
+                    const titleSpan = document.createElement('span');
+                    titleSpan.className = "truncate w-full font-bold tracking-wide";
+                    
+                    // 若為連續行程：在第一天或每週第一天(換行)顯示文字內容，其餘中間天顯示無縫連貫顏色
+                    if (isMultiDay) {
+                        if (isStart) {
+                            titleSpan.innerText = ev.title;
+                        } else if (isSunday) {
+                            titleSpan.innerText = `⟯ ${ev.title}`; // 換行後延續顯示標題
+                        } else {
+                            titleSpan.innerHTML = '&nbsp;'; // 保留高度，無縫橫跨色條
+                        }
+                    } else {
+                        titleSpan.innerText = ev.title;
+                    }
+
+                    eventBar.appendChild(titleSpan);
+
+                    eventBar.onclick = (e) => {
+                        e.stopPropagation();
+                        openModalForEdit(ev.id);
+                    };
+
+                    dayEventsContainer.appendChild(eventBar);
+                });
+
+                dayCell.appendChild(dayEventsContainer);
+                grid.appendChild(dayCell);
+            }
+            lucide.createIcons();
+        }
+
+        // 搜尋指定日期的事件 (含跨天行程)
+        function getEventsForDate(dateStr) {
+            const targetDate = new Date(dateStr);
+            return events.filter(ev => {
+                const startDate = new Date(ev.start);
+                const endDate = new Date(ev.end);
+                return targetDate >= startDate && targetDate <= endDate;
+            });
+        }
+
+        // 開啟 Modal (新增)
+        function openModal(defaultDate = null) {
+            if (!window.canEditCalendar?.()) { window.showFeedback?.('請先登入並取得編輯權限。'); return; }
+            window.editingRevision = null;
+            document.getElementById('modal-title').innerHTML = `
+                <i data-lucide="calendar-plus" class="w-6 h-6 text-morandi-sage"></i>
+                <span>新增待辦行程</span>
+            `;
+            document.getElementById('event-id').value = '';
+            document.getElementById('event-title').value = '';
+            
+            const todayStr = defaultDate || `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-01`;
+            document.getElementById('event-start').value = todayStr;
+            document.getElementById('event-end').value = todayStr;
+            document.getElementById('event-desc').value = '';
+            document.getElementById('delete-event-btn').classList.add('hidden');
+            
+            selectColor('sage');
+            document.getElementById('event-modal').classList.remove('hidden');
+            document.getElementById('event-modal').classList.add('flex');
+            lucide.createIcons();
+        }
+
+        // 開啟 Modal (編輯)
+        function openModalForEdit(eventId) {
+            if (!window.canEditCalendar?.()) { window.showFeedback?.('請先登入並取得編輯權限。'); return; }
+            const ev = events.find(item => item.id === eventId);
+            if (!ev) return;
+            window.editingRevision = ev.rev;
+
+            document.getElementById('modal-title').innerHTML = `
+                <i data-lucide="edit-3" class="w-6 h-6 text-morandi-sage"></i>
+                <span>編輯待辦行程</span>
+            `;
+            document.getElementById('event-id').value = ev.id;
+            document.getElementById('event-title').value = ev.title;
+            document.getElementById('event-start').value = ev.start;
+            document.getElementById('event-end').value = ev.end;
+            document.getElementById('event-desc').value = ev.desc || '';
+            document.getElementById('delete-event-btn').classList.remove('hidden');
+
+            selectColor(ev.color || 'sage');
+            document.getElementById('event-modal').classList.remove('hidden');
+            document.getElementById('event-modal').classList.add('flex');
+            lucide.createIcons();
+        }
+
+        // 關閉 Modal
+        function closeModal() {
+            document.getElementById('event-modal').classList.add('hidden');
+            document.getElementById('event-modal').classList.remove('flex');
+        }
+
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/12.5.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.5.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.5.0/firebase-database-compat.js"></script>
+    <script src="app.js"></script>
+</body></html>
