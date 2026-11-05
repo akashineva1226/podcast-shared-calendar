@@ -18,6 +18,9 @@ let permission = false, ownMembershipOff = null, ownRequestOff = null;
 let adminOff = [], members = {}, requests = {}, pendingWrites = 0;
 const noteDrafts = new Map();
 let notesBusy = false;
+let teamTasks = {};
+let tasksReady = false;
+const taskPanels = new Map();
 
 window.showFeedback = message => { el('feedback').textContent = message; };
 const isOwner = user => user?.emailVerified && user.uid === ownerUid;
@@ -31,6 +34,11 @@ function paintStatus() {
   el('save-notes-btn').disabled = !writable || notesBusy || !noteDrafts.has(monthId());
   for (const button of el('event-form').querySelectorAll('button')) button.disabled = pendingWrites > 0;
   el('month-subtitle').textContent = writable ? '點擊日期或行程，共同編輯團隊安排' : '公開瀏覽 · 登入並取得核准後可編輯';
+  for (const panel of taskPanels.values()) {
+    for (const control of panel.querySelectorAll('input, button')) {
+      control.disabled = !writable || !tasksReady || pendingWrites > 0;
+    }
+  }
 }
 function displayError(error) {
   console.error(error);
@@ -67,6 +75,71 @@ async function writeWithStatus(action) {
   try { await action(); showFeedback('已儲存，團隊成員會即時收到更新。'); return true; }
   catch (error) { displayError(error); return false; }
   finally { pendingWrites--; paintStatus(); }
+}
+function renderTeamTasks() {
+  for (const [group, panel] of taskPanels) {
+    const list = panel.querySelector('ul');
+    const tasks = Object.entries(teamTasks[group] || {});
+    list.replaceChildren();
+    if (!tasks.length) {
+      const empty = document.createElement('li');
+      empty.className = 'text-sm text-morandi-muted';
+      empty.textContent = tasksReady ? '目前沒有待辦事項。' : '正在載入待辦…';
+      list.append(empty);
+    }
+    for (const [id, task] of tasks) {
+      const item = document.createElement('li');
+      const label = document.createElement('label');
+      label.className = 'flex items-start gap-3 rounded-lg bg-morandi-bg p-3';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = task.done;
+      checkbox.className = 'mt-1 h-4 w-4 shrink-0 accent-morandi-sagedark';
+      const title = document.createElement('span');
+      title.className = task.done ? 'break-all line-through text-morandi-muted' : 'break-all';
+      title.textContent = task.title;
+      checkbox.addEventListener('change', async () => {
+        const done = checkbox.checked;
+        const saved = await writeWithStatus(() => db.ref(`calendar/tasks/${group}/${id}/done`).set(done));
+        if (!saved) checkbox.checked = teamTasks[group]?.[id]?.done ?? task.done;
+      });
+      label.append(checkbox, title);
+      item.append(label);
+      list.append(item);
+    }
+  }
+  paintStatus();
+}
+
+const taskLists = el('team-task-lists');
+if (taskLists) {
+  for (const [group, name] of Object.entries({host: '主持組', marketing: '行銷組', engineering: '工程組'})) {
+    const panel = document.createElement('section');
+    panel.className = 'min-w-0 rounded-2xl border border-morandi-border bg-white p-5 shadow-sm';
+    panel.innerHTML = `<h3 class="mb-3 font-bold"></h3>
+      <form class="mb-4 flex flex-wrap gap-2">
+        <input class="min-w-0 flex-1 rounded-lg border border-morandi-border px-3 py-2" required maxlength="160" placeholder="輸入待辦事項">
+        <button class="rounded-lg bg-morandi-sagedark px-3 py-2 text-white" type="submit">新增</button>
+      </form><ul class="space-y-2"></ul>`;
+    panel.querySelector('h3').textContent = name;
+    const input = panel.querySelector('input');
+    input.setAttribute('aria-label', `${name}待辦事項`);
+    panel.querySelector('form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const title = input.value.trim();
+      if (!title || pendingWrites || !tasksReady) return;
+      const saved = await writeWithStatus(() => db.ref(`calendar/tasks/${group}`).push({title, done: false}));
+      if (saved) input.value = '';
+    });
+    taskPanels.set(group, panel);
+    taskLists.append(panel);
+  }
+  renderTeamTasks();
+  db.ref('calendar/tasks').on('value', snapshot => {
+    teamTasks = snapshot.val() || {};
+    tasksReady = true;
+    renderTeamTasks();
+  }, error => { tasksReady = false; paintStatus(); displayError(error); });
 }
 function validDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
