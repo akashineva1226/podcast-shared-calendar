@@ -21,6 +21,9 @@ let notesBusy = false;
 let teamTasks = {};
 let tasksReady = false;
 const taskPanels = new Map();
+let taskMonthRef;
+let stopTaskMonth;
+let taskMonth;
 
 window.showFeedback = message => { el('feedback').textContent = message; };
 const isOwner = user => user?.emailVerified && user.uid === ownerUid;
@@ -77,6 +80,7 @@ async function writeWithStatus(action) {
   finally { pendingWrites--; paintStatus(); }
 }
 function renderTeamTasks() {
+  const monthRef = taskMonthRef;
   for (const [group, panel] of taskPanels) {
     const list = panel.querySelector('ul');
     const tasks = Object.entries(teamTasks[group] || {});
@@ -100,7 +104,8 @@ function renderTeamTasks() {
       title.textContent = task.title;
       checkbox.addEventListener('change', async () => {
         const done = checkbox.checked;
-        const saved = await writeWithStatus(() => db.ref(`calendar/tasks/${group}/${id}/done`).set(done));
+        if (monthRef !== taskMonthRef) return;
+        const saved = await writeWithStatus(() => monthRef.child(`${group}/${id}/done`).set(done));
         if (!saved) checkbox.checked = teamTasks[group]?.[id]?.done ?? task.done;
       });
       label.append(checkbox, title);
@@ -112,6 +117,31 @@ function renderTeamTasks() {
 }
 
 const taskLists = el('team-task-lists');
+window.loadTaskMonth = function () {
+  if (!taskLists || taskMonth === monthId()) return;
+  stopTaskMonth?.();
+  taskMonth = monthId();
+  // November keeps the original shared list so existing items and checkmarks carry over.
+  const monthRef = db.ref(taskMonth === '2026-11' ? 'calendar/tasks' : `calendar/monthlyTasks/${taskMonth}`);
+  taskMonthRef = monthRef;
+  teamTasks = {};
+  tasksReady = false;
+  el('team-tasks-heading').textContent = `${currentYear} 年 ${currentMonth + 1} 月各組待辦事項`;
+  for (const panel of taskPanels.values()) panel.querySelector('form').reset();
+  renderTeamTasks();
+  const onValue = snapshot => {
+    if (monthRef !== taskMonthRef) return;
+    teamTasks = snapshot.val() || {};
+    tasksReady = true;
+    renderTeamTasks();
+  };
+  monthRef.on('value', onValue, error => {
+    if (monthRef !== taskMonthRef) return;
+    el('team-tasks-heading').textContent += '（載入失敗）';
+    displayError(error);
+  });
+  stopTaskMonth = () => monthRef.off('value', onValue);
+};
 if (taskLists) {
   for (const [group, name] of Object.entries({host: '主持組', marketing: '行銷組', engineering: '工程組'})) {
     const panel = document.createElement('section');
@@ -128,18 +158,14 @@ if (taskLists) {
       event.preventDefault();
       const title = input.value.trim();
       if (!title || pendingWrites || !tasksReady) return;
-      const saved = await writeWithStatus(() => db.ref(`calendar/tasks/${group}`).push({title, done: false}));
-      if (saved) input.value = '';
+      const monthRef = taskMonthRef;
+      const saved = await writeWithStatus(() => monthRef.child(group).push({title, done: false}));
+      if (saved && monthRef === taskMonthRef) input.value = '';
     });
     taskPanels.set(group, panel);
     taskLists.append(panel);
   }
-  renderTeamTasks();
-  db.ref('calendar/tasks').on('value', snapshot => {
-    teamTasks = snapshot.val() || {};
-    tasksReady = true;
-    renderTeamTasks();
-  }, error => { tasksReady = false; paintStatus(); displayError(error); });
+  loadTaskMonth();
 }
 function validDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
