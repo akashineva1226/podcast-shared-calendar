@@ -23,13 +23,13 @@ GitHub Pages：Settings → Pages → Deploy from a branch → main → /(root)�
 
 Firebase 專案：`podcast-online-schedule`。資料庫位於新加坡 `asia-southeast1`，網址記錄在 `app.js`。網站中的 Firebase client config 是公開設定，不能取代存取規則；此專案不包含管理金鑰或登入權杖。
 
-管理員與核准成員可寫入行程、備忘錄；未核准或未登入的用戶只能讀取這兩個公開路徑。成員及申請名單僅管理員與當事人可讀，只有管理員可授權成員。規則驗證日期、內容長度、欄位、版本與修改者；未列出的路徑預設拒絕。
+管理員與核准成員可寫入行程、備忘錄；未核准或未登入的用戶只能讀取這兩個公開路徑。成員及申請名單僅管理員與當事人可讀，只有管理員可授權成員。管理員識別存於資料庫的私有 `admins` 路徑，須由有 Firebase 專案管理權限的人維護。規則驗證日期、內容長度、欄位、版本與修改者；未列出的路徑預設拒絕。
 
 使用 Node.js 20/22/24 LTS，登入有管理權限的 Firebase 帳號後：
 
 ```sh
 npx -y firebase-tools@latest login
-npx -y firebase-tools@latest deploy --only database,auth --project podcast-online-schedule
+npx -y firebase-tools@latest deploy --only database --project podcast-online-schedule
 ```
 
 修改 Google 登入設定時需保留 `akashineva1226.github.io` 為授權網域，以及 Firebase 原本的授權網域。若更換 GitHub 帳號或自訂網域，請同步更新 Firebase Authentication 設定。
@@ -39,3 +39,4 @@ npx -y firebase-tools@latest deploy --only database,auth --project podcast-onlin
 ## 外部依賴
 
 Tailwind CDN、Lucide、Google Fonts 與 Firebase JavaScript SDK 由網路載入。需有網路連線；Google 登入請使用支援彈出視窗的一般瀏覽器。
+
