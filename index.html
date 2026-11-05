@@ -140,7 +140,7 @@
 
         <section aria-labelledby="team-tasks-heading" class="space-y-3">
             <h2 id="team-tasks-heading" class="font-bold text-lg">各組待辦事項</h2>
-            <p class="text-sm text-morandi-muted">清單跨月份共用，核准成員可新增與勾選。</p>
+            <p class="text-sm text-morandi-muted">每個月有獨立清單，核准成員可新增與勾選。</p>
             <div id="team-task-lists" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
         </section>
 
@@ -286,6 +286,7 @@
             currentYear = newYear;
             currentMonth = newMonth;
             renderCalendar();
+            window.loadTaskMonth?.();
         }
 
         // 核心：渲染月曆格子與跨天橫條
@@ -497,5 +498,5 @@
     <script src="https://www.gstatic.com/firebasejs/12.5.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.5.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.5.0/firebase-database-compat.js"></script>
-    <script src="app.js?v=team-tasks"></script>
+    <script src="app.js?v=monthly-tasks"></script>
 </body></html>
