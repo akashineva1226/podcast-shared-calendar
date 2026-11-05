@@ -135,7 +135,7 @@
                 </div>
                 <span id="save-status" class="text-xs sm:text-sm text-morandi-muted opacity-0 transition-opacity">已自動儲存</span>
             </div>
-            <textarea id="monthly-notes" oninput="markNotesDirty()" maxlength="10000" disabled placeholder="在此輸入本月份的總結、重要目標或特別提醒事項..." class="w-full h-28 p-4 text-base bg-morandi-bg/60 border border-morandi-border rounded-xl focus:outline-none focus:ring-2 focus:ring-morandi-sage/50 resize-none text-morandi-text placeholder:text-morandi-muted/70 leading-relaxed"></textarea>
+            <textarea id="monthly-notes" oninput="markNotesDirty()" maxlength="10000" disabled placeholder="在此輸入本月份的總結、重要目標或特別提醒事項..." class="w-full h-28 p-4 text-base bg-morandi-bg/60 border border-morandi-border rounded-xl focus:outline-none focus:ring-2 focus:ring-morandi-sage/50 resize-none text-morandi-text placeholder:text-morandi-muted/70 leading-relaxed"></textarea><div class="flex gap-3 items-center mt-3"><button id="save-notes-btn" disabled onclick="saveMonthlyNotes()" class="px-4 py-2 rounded-xl bg-morandi-sage text-white">儲存本月備忘錄</button><span class="text-xs text-morandi-muted">修改後請按儲存；其他成員會即時收到。</span></div>
         </footer>
 
     </div>
